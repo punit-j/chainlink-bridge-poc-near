@@ -50,25 +50,12 @@ pub trait Prover {
 
 #[ext_contract(ext_self)]
 trait ChainLinkBridgeInterface {
-    fn aggregator_proof_callback(
-        &mut self,
-        #[callback]
-        #[serializer(borsh)]
-        verification_success: bool,
-        #[serializer(borsh)] symbol: String,
-        #[serializer(borsh)] aggregator_address: Vec<u8>,
-        #[serializer(borsh)] header_data: Vec<u8>,
-        #[serializer(borsh)] eth_height: u64,
-        #[serializer(borsh)] proof: DataProof,
-    );
-
     fn data_proof_callback(
         &mut self,
         #[callback]
         #[serializer(borsh)]
         verification_success: bool,
         #[serializer(borsh)] symbol: String,
-        #[serializer(borsh)] eth_height: u64,
         #[serializer(borsh)] proof: DataProof,
     );
 }
@@ -77,22 +64,12 @@ trait ChainLinkBridgeInterface {
     Default, BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
 )]
 pub struct DataProof{
+    header_data: Vec<u8>,
     account_proof: Vec<Vec<u8>>, // account proof
     account_state: Vec<u8>,      // rlp encoded account state
     storage_proof: Vec<Vec<u8>>, // storage proof
     storage_key_hash: Vec<u8>,   // keccak256 of storage key
     value: eth_types::U256,      // storage value
-}
-
-#[derive(
-    Default, BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
-)]
-pub struct AggregatorProof{
-    header_data: Vec<u8>,
-    account_proof: Vec<Vec<u8>>, // account proof
-    account_state: Vec<u8>,      // rlp encoded account state
-    storage_proof: Vec<Vec<u8>>, // storage proof
-    value: Vec<u8>,      // storage value
     eth_height: u64,
 }
 
@@ -135,7 +112,7 @@ impl ChainLinkBridge {
         contract
     }
 
-    pub fn add_feed_data(&self, symbol: String, aggregator_proof: AggregatorProof, data_proof: DataProof) -> Promise{
+    pub fn add_feed_data(&self, symbol: String, data_proof: DataProof) -> Promise{
         let feed_address = self.symbol_to_pricefeed_address.get(&symbol).unwrap_or_else(|| {
             panic!("Price Feed not registered for {} symbol", symbol)
         });
@@ -145,66 +122,20 @@ impl ChainLinkBridge {
         });
 
         require!(block_height() - previous_data.added_at >= self.min_block_delay_near, "Should cross min block delay for near");
-        require!(aggregator_proof.eth_height - previous_data.eth_height >= self.min_block_delay_eth, "Should cross min block delay for eth");
+        require!(data_proof.eth_height - previous_data.eth_height >= self.min_block_delay_eth, "Should cross min block delay for eth");
 
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(tera_gas(50))
             .with_attached_deposit(NO_DEPOSIT)
             .verify_storage_proof(
-                aggregator_proof.header_data.clone(),
-                aggregator_proof.account_proof,
+                data_proof.header_data.clone(),
+                data_proof.account_proof.clone(),
                 feed_address.to_vec(),
-                aggregator_proof.account_state,
+                data_proof.account_state.clone(),
                 AGGREGATOR_STORAGE_KEY_HASH,
-                aggregator_proof.storage_proof,
-                aggregator_proof.value.clone(),
-                Some(aggregator_proof.eth_height),
-                None,
-                false,
-            )
-            .then(
-                ext_self::ext(current_account_id())
-                    .with_static_gas(tera_gas(50))
-                    .with_attached_deposit(NO_DEPOSIT)
-                    .aggregator_proof_callback(
-                        symbol,
-                        aggregator_proof.value,
-                        aggregator_proof.header_data,
-                        aggregator_proof.eth_height,
-                        data_proof
-                    ),
-            )
-    }
-
-    #[private]
-    fn aggregator_proof_callback(
-        &self,
-        #[callback]
-        #[serializer(borsh)]
-        verification_success: bool,
-        #[serializer(borsh)] symbol: String,
-        #[serializer(borsh)] aggregator_address: Vec<u8>,
-        #[serializer(borsh)] header_data: Vec<u8>,
-        #[serializer(borsh)] eth_height: u64,
-        #[serializer(borsh)] proof: DataProof,
-    ) {
-        require!(
-            verification_success,
-            format!("Verification failed for aggregator proof")
-        );
-
-        ext_prover::ext(self.prover_account.clone())
-            .with_static_gas(tera_gas(50))
-            .with_attached_deposit(NO_DEPOSIT)
-            .verify_storage_proof(
-                header_data,
-                proof.account_proof.clone(),
-                aggregator_address,
-                proof.account_state.clone(),
-                proof.storage_key_hash.clone(),
-                proof.storage_proof.clone(),
-                proof.value.try_to_vec().unwrap(),
-                Some(eth_height),
+                data_proof.storage_proof.clone(),
+                data_proof.value.try_to_vec().unwrap(),
+                Some(data_proof.eth_height),
                 None,
                 false,
             )
@@ -214,10 +145,9 @@ impl ChainLinkBridge {
                     .with_attached_deposit(NO_DEPOSIT)
                     .data_proof_callback(
                         symbol,
-                        eth_height,
-                        proof
+                        data_proof
                     ),
-            );
+            )
     }
 
     #[private]
@@ -227,7 +157,6 @@ impl ChainLinkBridge {
         #[serializer(borsh)]
         verification_success: bool,
         #[serializer(borsh)] symbol: String,
-        #[serializer(borsh)] eth_height: u64,
         #[serializer(borsh)] proof: DataProof,
     ) {
         require!(
@@ -235,7 +164,7 @@ impl ChainLinkBridge {
             format!("Verification failed for data proof")
         );
 
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: proof.value, added_at: block_height(), eth_height: eth_height});
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: proof.value, added_at: block_height(), eth_height: proof.eth_height});
 
     }
 

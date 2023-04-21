@@ -14,7 +14,7 @@ contract ChainLinkPriceFetcher {
     uint256 public minBlockDelayAllowed;
 
     constructor(uint256[] memory indices, address[] memory feedAddress, uint256 minBlockDelayAllowed_) {
-        require(indices.length == feedAddress.length, "length dont match");
+        require(indices.length == feedAddress.length, "length don't match");
         for (uint i = 0; i < indices.length; i++){
             priceFeed[indices[i]] = feedAddress[i];
         }

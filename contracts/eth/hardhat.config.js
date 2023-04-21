@@ -1,8 +1,22 @@
 require("@nomicfoundation/hardhat-toolbox");
+require('hardhat-storage-layout');
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.18",
+  solidity: {compilers: [
+    {
+      version: "0.8.18",
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 200,
+        },
+      },
+    },
+    {
+      version: "0.6.6",
+    },
+  ]},
   networks:{
     sepolia: {
       url: `https://eth-sepolia.g.alchemy.com/v2/xn-99cCZKKylHh0uDK8wMBu0RCEhw9Nh`,

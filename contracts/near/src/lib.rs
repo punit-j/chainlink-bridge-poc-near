@@ -1,7 +1,8 @@
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{LookupMap};
+use near_sdk::collections::LookupMap;
 use near_sdk::env::{current_account_id, block_height};
 use near_sdk::serde::{Deserialize, Serialize};
+use near_sdk::json_types::U128;
 #[allow(unused_imports)]
 use near_sdk::Promise;
 use near_sdk::{
@@ -11,6 +12,7 @@ use near_sdk::{
 pub type EthAddress = [u8; 20];
 pub const TGAS: near_sdk::Gas = near_sdk::Gas::ONE_TERA;
 pub const NO_DEPOSIT: u128 = 0;
+
 
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
@@ -60,7 +62,7 @@ trait ChainLinkBridgeInterface {
 }
 
 #[derive(
-    Default, BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
+    BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
 )]
 pub struct DataProof{
     header_data: Vec<u8>,
@@ -68,15 +70,15 @@ pub struct DataProof{
     account_state: Vec<u8>,      // rlp encoded account state
     storage_proof: Vec<Vec<u8>>, // storage proof
     storage_key_hash: Vec<u8>,   // keccak256 of storage key
-    value: eth_types::U256,      // storage value
+    value: U128,      // storage value
     eth_height: u64,
 }
 
 #[derive(
-    Default, BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
+    BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
 )]
 pub struct PriceFeed{
-    latest_price: eth_types::U256,
+    latest_price: U128,
     added_at: u64,
     eth_height: u64,
 }
@@ -169,7 +171,16 @@ impl ChainLinkBridge {
     //adds new price feeds with corresponding chainlink address, eg BTC/USD
     pub fn add_price_feed(&mut self, symbol: String, pricefeed_address: String) {
         self.symbol_to_pricefeed_address.insert(&symbol, &get_eth_address(pricefeed_address));
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: eth_types::U256(0.into()), added_at: 0, eth_height: 0 });
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(0), added_at: 0, eth_height: 0 });
+    }
+
+    pub fn get_latest_price(&self, symbol:String) -> PriceFeed{
+        self.latest_price.get(&symbol).unwrap()
+    }
+
+    pub fn get_symbol_to_pricefeed_address(&self, symbol: String) -> String{
+        let symbol_price_feed_address = self.symbol_to_pricefeed_address.get(&symbol).unwrap_or_else(|| near_sdk::env::panic_str("unable to get price feed address in hex"));
+        hex::encode(symbol_price_feed_address)
     }
 }
 
@@ -183,3 +194,4 @@ pub fn get_eth_address(address: String) -> EthAddress {
     require!(data.len() == 20, "address should be 20 bytes long");
     data.try_into().unwrap()
 }
+

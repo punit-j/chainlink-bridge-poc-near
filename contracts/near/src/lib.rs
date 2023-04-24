@@ -11,7 +11,6 @@ use near_sdk::{
 pub type EthAddress = [u8; 20];
 pub const TGAS: near_sdk::Gas = near_sdk::Gas::ONE_TERA;
 pub const NO_DEPOSIT: u128 = 0;
-pub const AGGREGATOR_STORAGE_KEY_HASH: Vec<u8> =  2.try_to_vec().unwrap().into(); //TODO: confirm this
 
 #[derive(BorshSerialize, BorshStorageKey)]
 enum StorageKey {
@@ -132,7 +131,7 @@ impl ChainLinkBridge {
                 data_proof.account_proof.clone(),
                 feed_address.to_vec(),
                 data_proof.account_state.clone(),
-                AGGREGATOR_STORAGE_KEY_HASH,
+                data_proof.storage_key_hash.clone(),
                 data_proof.storage_proof.clone(),
                 data_proof.value.try_to_vec().unwrap(),
                 Some(data_proof.eth_height),
@@ -165,7 +164,6 @@ impl ChainLinkBridge {
         );
 
         self.latest_price.insert(&symbol, &PriceFeed { latest_price: proof.value, added_at: block_height(), eth_height: proof.eth_height});
-
     }
 
     //adds new price feeds with corresponding chainlink address, eg BTC/USD

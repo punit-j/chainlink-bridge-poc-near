@@ -70,7 +70,7 @@ pub struct DataProof{
     account_state: Vec<u8>,      // rlp encoded account state
     storage_proof: Vec<Vec<u8>>, // storage proof
     storage_key_hash: Vec<u8>,   // keccak256 of storage key
-    value: U128,      // storage value
+    value: Vec<u8>,      // storage value
     eth_height: u64,
 }
 
@@ -135,7 +135,7 @@ impl ChainLinkBridge {
                 data_proof.account_state.clone(),
                 data_proof.storage_key_hash.clone(),
                 data_proof.storage_proof.clone(),
-                data_proof.value.try_to_vec().unwrap(),
+                data_proof.value.clone(),
                 Some(data_proof.eth_height),
                 None,
                 false,
@@ -165,13 +165,19 @@ impl ChainLinkBridge {
             format!("Verification failed for data proof")
         );
 
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: proof.value, added_at: block_height(), eth_height: proof.eth_height});
+        let value = self.get_value_from_proof(&proof.value);
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(value) , added_at: block_height(), eth_height: proof.eth_height});
     }
 
     //adds new price feeds with corresponding chainlink address, eg BTC/USD
     pub fn add_price_feed(&mut self, symbol: String, pricefeed_address: String) {
         self.symbol_to_pricefeed_address.insert(&symbol, &get_eth_address(pricefeed_address));
         self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(0), added_at: 0, eth_height: 0 });
+    }
+
+    fn get_value_from_proof(&self, value: &Vec<u8>) -> u128{
+        let bytes_relevant: [u8; 16] = value[48..64].try_into().expect("slice with incorrect length");
+        u128::from_be_bytes(bytes_relevant)
     }
 
     pub fn get_latest_price(&self, symbol:String) -> PriceFeed{

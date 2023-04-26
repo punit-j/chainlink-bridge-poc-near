@@ -165,8 +165,8 @@ impl ChainLinkBridge {
             format!("Verification failed for data proof")
         );
 
-        let value = self.get_value_from_proof(&proof.value);
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(value) , added_at: block_height(), eth_height: proof.eth_height});
+        let value = get_value_from_proof(&proof.value);
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(value.clone()) , added_at: block_height(), eth_height: proof.eth_height});
     }
 
     //adds new price feeds with corresponding chainlink address, eg BTC/USD
@@ -175,10 +175,6 @@ impl ChainLinkBridge {
         self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(0), added_at: 0, eth_height: 0 });
     }
 
-    fn get_value_from_proof(&self, value: &Vec<u8>) -> u128{
-        let bytes_relevant: [u8; 16] = value[48..64].try_into().expect("slice with incorrect length");
-        u128::from_be_bytes(bytes_relevant)
-    }
 
     pub fn get_latest_price(&self, symbol:String) -> PriceFeed{
         self.latest_price.get(&symbol).unwrap()
@@ -199,5 +195,10 @@ pub fn get_eth_address(address: String) -> EthAddress {
         .unwrap_or_else(|_| near_sdk::env::panic_str("address should be a valid hex string."));
     require!(data.len() == 20, "address should be 20 bytes long");
     data.try_into().unwrap()
+}
+
+fn get_value_from_proof(value: &Vec<u8>) -> u128{
+    let bytes_relevant: [u8; 16] = value[48..64].try_into().expect("slice with incorrect length");
+    u128::from_be_bytes(bytes_relevant)
 }
 

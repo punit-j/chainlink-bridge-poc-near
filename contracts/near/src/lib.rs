@@ -166,13 +166,13 @@ impl ChainLinkBridge {
         );
 
         let value = get_value_from_proof(&proof.value);
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(value.clone()) , added_at: block_height(), eth_height: proof.eth_height});
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128(value) , added_at: block_height(), eth_height: proof.eth_height});
     }
 
     //adds new price feeds with corresponding chainlink address, eg BTC/USD
     pub fn add_price_feed(&mut self, symbol: String, pricefeed_address: String) {
         self.symbol_to_pricefeed_address.insert(&symbol, &get_eth_address(pricefeed_address));
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128::from(0), added_at: 0, eth_height: 0 });
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128(0), added_at: 0, eth_height: 0 });
     }
 
 

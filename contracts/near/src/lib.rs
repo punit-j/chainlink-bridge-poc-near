@@ -113,7 +113,7 @@ impl ChainLinkBridge {
         contract
     }
 
-    pub fn add_feed_data(&self, symbol: String, data_proof: DataProof) -> Promise{
+    pub fn add_feed_data(&self, symbol: String, #[serializer(borsh)] data_proof: DataProof) -> Promise{
         let feed_address = self.symbol_to_pricefeed_address.get(&symbol).unwrap_or_else(|| {
             panic!("Price Feed not registered for {} symbol", symbol)
         });

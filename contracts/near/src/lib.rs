@@ -2,7 +2,6 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
 use near_sdk::env::{current_account_id, block_height};
 use near_sdk::serde::{Deserialize, Serialize};
-use near_sdk::json_types::U128;
 #[allow(unused_imports)]
 use near_sdk::Promise;
 use near_sdk::{
@@ -78,7 +77,7 @@ pub struct DataProof{
     BorshDeserialize, BorshSerialize, Debug, Clone, Serialize, Deserialize, PartialEq,
 )]
 pub struct PriceFeed{
-    latest_price: U128,
+    latest_price: u128,
     added_at: u64,
     eth_height: u64,
 }
@@ -113,17 +112,21 @@ impl ChainLinkBridge {
         contract
     }
 
-    pub fn add_feed_data(&self, symbol: String, #[serializer(borsh)] data_proof: DataProof) -> Promise{
+    pub fn add_feed_data(&self, symbol: String, data_proof: near_sdk::json_types::Base64VecU8) -> Promise{
+
+        let data_proof = DataProof::try_from_slice(&data_proof.0)
+        .unwrap_or_else(|_| env::panic_str("Invalid borsh format of the `DataProof`"));
+
         let feed_address = self.symbol_to_pricefeed_address.get(&symbol).unwrap_or_else(|| {
             panic!("Price Feed not registered for {} symbol", symbol)
         });
 
-        let previous_data = self.latest_price.get(&symbol).unwrap_or_else(|| {
-            panic!("Price not registered for {} symbol", symbol)
-        });
+        // let previous_data = self.latest_price.get(&symbol).unwrap_or_else(|| {
+        //     panic!("Price not registered for {} symbol", symbol)
+        // });
 
-        require!(block_height() - previous_data.added_at >= self.min_block_delay_near, "Should cross min block delay for near");
-        require!(data_proof.eth_height - previous_data.eth_height >= self.min_block_delay_eth, "Should cross min block delay for eth");
+        // require!(block_height() - previous_data.added_at >= self.min_block_delay_near, "Should cross min block delay for near");
+        // require!(data_proof.eth_height - previous_data.eth_height >= self.min_block_delay_eth, "Should cross min block delay for eth");
 
         ext_prover::ext(self.prover_account.clone())
             .with_static_gas(tera_gas(50))
@@ -151,6 +154,7 @@ impl ChainLinkBridge {
             )
     }
 
+    #[allow(dead_code)]
     #[private]
     fn data_proof_callback(
         &mut self,
@@ -166,15 +170,15 @@ impl ChainLinkBridge {
         );
 
         let value = get_value_from_proof(&proof.value);
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128(value) , added_at: block_height(), eth_height: proof.eth_height});
+        self.latest_price.insert(&symbol, &PriceFeed { latest_price: u128::from(value) , added_at: block_height(), eth_height: proof.eth_height});
     }
 
     //adds new price feeds with corresponding chainlink address, eg BTC/USD
     pub fn add_price_feed(&mut self, symbol: String, pricefeed_address: String) {
         self.symbol_to_pricefeed_address.insert(&symbol, &get_eth_address(pricefeed_address));
-        self.latest_price.insert(&symbol, &PriceFeed { latest_price: U128(0), added_at: 0, eth_height: 0 });
+        // let price_feed = PriceFeed { latest_price: 0, added_at: 0, eth_height: 0 };
+        // self.latest_price.insert(&"ETH/USD".to_string(), &price_feed);
     }
-
 
     pub fn get_latest_price(&self, symbol:String) -> PriceFeed{
         self.latest_price.get(&symbol).unwrap()
@@ -194,11 +198,55 @@ pub fn get_eth_address(address: String) -> EthAddress {
     let data = hex::decode(address)
         .unwrap_or_else(|_| near_sdk::env::panic_str("address should be a valid hex string."));
     require!(data.len() == 20, "address should be 20 bytes long");
-    data.try_into().unwrap()
+    data.try_into().unwrap_or_else(|_| near_sdk::env::panic_str("cannot unwrap"))
 }
 
-fn get_value_from_proof(value: &Vec<u8>) -> u128{
-    let bytes_relevant: [u8; 16] = value[48..64].try_into().expect("slice with incorrect length");
+pub fn get_value_from_proof(value: &Vec<u8>) -> u128{
+    let bytes_relevant: [u8; 16] = value[12..28].try_into().expect("slice with incorrect length");
     u128::from_be_bytes(bytes_relevant)
 }
 
+#[cfg(test)]
+mod tests{
+    use super::*;
+    use near_sdk::test_utils::{accounts};
+
+    #[test]
+    fn test_add() {
+        let mut contract = ChainLinkBridge::new(accounts(1), 0, 0);
+        contract.add_price_feed("ETH/USD".to_string(), "37bC7498f4FF12C19678ee8fE19d713b87F6a9e6".to_string())
+    }
+
+
+    #[test]
+    fn test_data_proof_callback() {
+        let value: Vec<u8> = hex::decode("6448f517000000000000000000000000000000000000002c1fb2f598").unwrap();
+        let data_proof = DataProof{
+            header_data: vec![],
+            account_proof:vec![vec![]],
+            account_state: vec![],
+            storage_proof: vec![vec![]],
+            storage_key_hash: vec![],
+            value: value,
+            eth_height: 100
+        };
+        let mut contract = ChainLinkBridge::new(accounts(1), 0, 0);
+        contract.data_proof_callback(true, "ETH/USD".to_string(), data_proof);
+        println!("{:?}", contract.get_latest_price("ETH/USD".to_string()));
+    }
+
+    #[test]
+    fn test_get_value_from_proof() {
+        let value: Vec<u8> = hex::decode("6448f517000000000000000000000000000000000000002c1fb2f598").unwrap();
+        let data_proof = DataProof{
+            header_data: vec![],
+            account_proof:vec![vec![]],
+            account_state: vec![],
+            storage_proof: vec![vec![]],
+            storage_key_hash: vec![],
+            value: value,
+            eth_height: 100
+        };
+        println!("{:?}", get_value_from_proof(&data_proof.value));
+    }
+}

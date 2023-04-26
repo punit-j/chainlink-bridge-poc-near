@@ -45,7 +45,6 @@ async function findPriceFeedProof() {
     fs.writeFile('../FEE-DATA-PROOF.json',JSON.stringify(proof, null, null), (err) => {
         if (err) throw err;
     })
-    
     console.log(proof, "proof")
 }
 findPriceFeedProof()

@@ -1,4 +1,4 @@
-#!/bin/sh
+# !/bin/sh
 set -e             #set -e sets an non-ignoring error state.
 echo ">> Building ChainLinkBridge Contract"
 
